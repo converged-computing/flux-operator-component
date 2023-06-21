@@ -1,0 +1,3 @@
+fluxoperator
+kubernetes
+kubescaler[all]
