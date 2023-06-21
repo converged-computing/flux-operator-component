@@ -1,4 +1,4 @@
-name: flux-arm complete build
+name: flux-operator-component container build
 on:
   # This must be triggered manually
   workflow_dispatch:
