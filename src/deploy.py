@@ -182,10 +182,16 @@ def ensure_flux_operator_yaml(args):
     # Boolean to determine if we should cleanup
     cleanup = False
 
-    # flux operator yaml default is current from main
-    if not args.flux_operator_yaml:
+    # Are we retrieving a remote URL?
+    is_remote = args.flux_operator_yaml.startswith("http")
+
+    # If we are given a url address
+    if not args.flux_operator_yaml or is_remote:
+        download_file = (
+            default_flux_operator_yaml if not is_remote else args.flux_operator_yaml
+        )
         args.flux_operator_yaml = utils.get_tmpfile(prefix="flux-operator") + ".yaml"
-        r = requests.get(default_flux_operator_yaml, allow_redirects=True)
+        r = requests.get(download_file, allow_redirects=True)
         utils.write_file(r.content.decode("utf-8"), args.flux_operator_yaml)
         cleanup = True
 
@@ -321,7 +327,7 @@ def main():
 
     # Wait until broker is completed, stream output will finish
     # Note this also returns the lines
-    operator.stream_output(args.outfile or "/dev/null");
+    operator.stream_output(args.outfile or "/dev/null")
 
     # Delete the MiniCluster when we have the logs (and written to file)
     operator.delete()

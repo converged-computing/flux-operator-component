@@ -16,8 +16,6 @@ source env/bin/activate
 pip install kfp --upgrade
 ```
 
-**under development**
-
 ## Development
 
 ### Local
@@ -126,13 +124,106 @@ All pods are terminated.
 
 ### KubeFlow on GKE
 
-Now let's test fully in KubeFlow! First, build the container:
+Now let's test fully in KubeFlow! Note that the container is provided via an automated build
+alongside the repository.
+
+#### Create Cluster
+
+The first step is to create the cluster. Note that we are providing scopes for "cloud-platform"
+so all APIs should work
+
+```bash
+GOOGLE_PROJECT=myproject
+CLUSTER_NAME="kubeflow-pipelines-standalone"
+
+gcloud container clusters create $CLUSTER_NAME  \
+     --zone "us-central1-a" \
+     --machine-type "e2-standard-2"  \
+     --scopes "cloud-platform" \
+     --project $GOOGLE_PROJECT
+```
+
+Next (when your cluster is ready and healthhy!) [deploy pipelines](https://www.kubeflow.org/docs/components/pipelines/v1/installation/standalone-deployment/#deploying-kubeflow-pipelines)
+
+```bash
+export PIPELINE_VERSION=1.8.5
+kubectl apply -k "github.com/kubeflow/pipelines/manifests/kustomize/cluster-scoped-resources?ref=$PIPELINE_VERSION"
+kubectl wait --for condition=established --timeout=60s crd/applications.app.k8s.io
+kubectl apply -k "github.com/kubeflow/pipelines/manifests/kustomize/env/dev?ref=$PIPELINE_VERSION"
+```
+
+Here is how to get the public URL for pipelines (it will show when it's ready):
+
+```bash
+kubectl describe configmap inverse-proxy-config -n kubeflow | grep googleusercontent.com
+```
+```console
+4ad924b8db1028a2-dot-us-central1.pipelines.googleusercontent.com
+```
+
+We've already installed kfp in the first step, so we don't need to do that again.
+
+
+### Pipeline
+
+We have a [sample.py](sample.py) pipeline provided. We can "compile" it (a YAML in a .tar.gz)
+as follows:
+
+```bash
+kfp dsl compile --py sample.py --output hello-world.yaml
+```
+
+Expose the RESTful API (in one terminal)
+
+```bash
+SVC_PORT=$(kubectl -n kubeflow get svc/ml-pipeline -o json | jq ".spec.ports[0].port")
+kubectl port-forward -n kubeflow svc/ml-pipeline ${SVC_PORT}:8888
+```
+
+Try uploading the YAML file:
+
+```bash
+SVC=localhost:8888
+PIPELINE_ID=$(curl -F "uploadfile=@hello-world.yaml" ${SVC}/apis/v1beta1/pipelines/upload | jq -r .id)
+
+# TODO get status
+curl ${SVC}/apis/v1beta1/pipelines/${PIPELINE_ID} | jq
+
+# Trigger Run
+RUN_ID=$((
+curl -H "Content-Type: application/json" -X POST ${SVC}/apis/v1beta1/runs \
+-d @- << EOF
+{
+   "name":"${PIPELINE_NAME}_run",
+   "pipeline_spec":{
+      "pipeline_id":"${PIPELINE_ID}"
+   }
+}
+EOF
+) | jq -r .run.id)
+
+# Get results
+curl ${SVC}/apis/v1beta1/runs/${RUN_ID} | jq
+```
+
+**under development** I got too sleepy.
+
+#### Clean Up
+
+When you are done:
+
+```bash
+$ gcloud container clusters delete $CLUSTER_NAME
+```
+
+### Building the Container
+
+If you need to build the container locally:
 
 ```bash
 $ docker build -t ghcr.io/converged-computing/flux-operator-component .
 ```
 
-**under development**
 
 ## License
 
