@@ -2,7 +2,6 @@
 
 # An example pipeline (that gets compiled) using the Flux Operator component!
 import os
-import kfp
 import kfp.dsl as dsl
 from kfp import components
 
@@ -20,8 +19,10 @@ def get_current_namespace():
         current_namespace = "kubeflow"
     return current_namespace
 
+
 def get_project():
-    return os.environ.get('GOOGLE_PROJECT')
+    return os.environ.get("GOOGLE_PROJECT") or "llnl-flux"
+
 
 @dsl.pipeline(
     name="hello-world-flux-operator",

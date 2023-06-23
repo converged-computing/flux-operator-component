@@ -1,5 +1,6 @@
 name: Flux Framework MiniCluster
-description: Launch a task to run on a Flux Framework MiniCluster
+description: |
+  Launch a task to run on a Flux Framework MiniCluster
 inputs:
   - {name: project, type: String, "description": "Google Cloud project (required)"}
   - {name: image, type: String, "description": "Container image for MiniCluster"}
@@ -27,6 +28,7 @@ inputs:
 #  - {name: output_model_uri, type: {GcsPath: {data_type: Keras model}}, description: 'GCS path where the trained model has been saved. The model (topology + weights + optimizer state) is saved in HDF5 format and can be loaded back by calling keras.models.load_model'} #Remove GcsUri and make it a proper output once artifact passing support is checked in.
 
 metadata:
+  description: Launch a task to run on a Flux Framework MiniCluster
   annotations:
     author: Vanessasaurus <sochat1@llnl.gov>
     canonical_location: 'https://raw.githubusercontent.com/converged-computing/flux-operator-component/main/component.yaml'
