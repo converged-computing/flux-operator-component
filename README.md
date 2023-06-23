@@ -16,8 +16,6 @@ source env/bin/activate
 pip install kfp --upgrade
 ```
 
-**under development**
-
 ## Development
 
 ### Local
@@ -126,13 +124,166 @@ All pods are terminated.
 
 ### KubeFlow on GKE
 
-Now let's test fully in KubeFlow! First, build the container:
+Now let's test fully in KubeFlow! Note that the container is provided via an automated build
+alongside the repository.
+
+#### Create Cluster
+
+The first step is to create the cluster. Note that we are providing scopes for "cloud-platform"
+so all APIs should work
+
+```bash
+GOOGLE_PROJECT=myproject
+CLUSTER_NAME="kubeflow-pipelines-standalone"
+
+gcloud container clusters create $CLUSTER_NAME  \
+     --zone "us-central1-a" \
+     --machine-type "e2-standard-2"  \
+     --scopes "cloud-platform" \
+     --project $GOOGLE_PROJECT
+```
+
+Next (when your cluster is ready and healthhy!) [deploy pipelines](https://www.kubeflow.org/docs/components/pipelines/v1/installation/standalone-deployment/#deploying-kubeflow-pipelines)
+
+```bash
+git clone --depth 1 https://github.com/kubeflow/pipelines /tmp/kubeflow
+cd /tmp/kubeflow/manifests/kustomize
+KFP_ENV=platform-agnostic
+kubectl apply -k cluster-scoped-resources/
+kubectl wait crd/applications.app.k8s.io --for condition=established --timeout=60s
+kubectl apply -k "env/${KFP_ENV}/"
+kubectl wait pods -l application-crd-id=kubeflow-pipelines -n kubeflow --for condition=Ready --timeout=1800s
+kubectl port-forward -n kubeflow svc/ml-pipeline-ui 8080:80
+```
+
+Then you should be able to open up to [http://localhost:8080/#/pipelines](http://localhost:8080/#/pipelines).
+We've already installed kfp in the first step, so we don't need to do that again.
+Expose the RESTful API (in one terminal)
+
+```bash
+# Get the port (8888)
+kubectl -n kubeflow get svc/ml-pipeline -o json | jq ".spec.ports[0].port
+kubectl port-forward -n kubeflow svc/ml-pipeline 9999:8888
+```
+
+### Pipeline
+
+
+We have a [sample.py](sample.py) pipeline provided. We can "compile" it to YAML
+as follows:
+
+```bash
+kfp dsl compile --py sample.py --output hello-world.yaml
+```
+
+Try uploading the YAML file:
+
+```bash
+SVC=localhost:9999
+PIPELINE_ID=$(curl -F "uploadfile=@hello-world.yaml" ${SVC}/apis/v1beta1/pipelines/upload | jq -r .id)
+```
+
+We can then get a status!
+
+```bash
+$ curl ${SVC}/apis/v1beta1/pipelines/${PIPELINE_ID} | jq
+```
+```console
+{
+  "id": "6c0350c3-68eb-4359-8ae9-2c3d46765280",
+  "created_at": "2023-06-22T23:42:42Z",
+  "name": "hello-world.yaml",
+  "default_version": {
+    "id": "27b06982-6cf4-4e72-a6d4-ee4b28eb670b",
+    "name": "hello-world.yaml",
+    "created_at": "2023-06-22T23:42:42Z",
+    "resource_references": [
+      {
+        "key": {
+          "type": "PIPELINE",
+          "id": "6c0350c3-68eb-4359-8ae9-2c3d46765280"
+        },
+        "relationship": "OWNER"
+      }
+    ]
+  }
+}
+```
+And then trigger a run!
+
+```bash
+# Trigger Run
+RUN_ID=$((
+curl -H "Content-Type: application/json" -X POST ${SVC}/apis/v1beta1/runs \
+-d @- << EOF
+{
+   "name":"flux_component_run_1",
+   "pipeline_spec":{
+      "pipeline_id":"${PIPELINE_ID}",
+      "args": {"project": "llnl-flux"}
+   }
+}
+EOF
+) | jq -r .run.id)
+```
+
+At this point, we have some kind of bug reported in the log of the pod (which doesn't make it to the UI because there is an error message about a pod name):
+
+```bash
+$ kubectl logs -n kubeflow   hello-world-flux-operator-bf4dq-691794632 
+```
+```console
+I0622 23:49:18.534358      17 main.go:224] output ExecutorInput:{
+  "inputs": {
+    "parameterValues": {
+      "command": "echo hello world",
+      "image": "ghcr.io/flux-framework/flux-restful-api:latest",
+      "local": true,
+      "name": "hello-world-run-123",
+      "namespace": "kubeflow",
+      "nnodes": 2,
+      "project": "llnl-flux"
+    }
+  },
+  "outputs": {
+    "outputFile": "/tmp/kfp_outputs/output_metadata.json"
+  }
+}
+time="2023-06-22T23:49:19.209Z" level=info msg="sub-process exited" argo=true error="<nil>"
+time="2023-06-22T23:49:19.209Z" level=info msg="/tmp/outputs/pod-spec-patch -> /var/run/argo/outputs/parameters//tmp/outputs/pod-spec-patch" argo=true
+time="2023-06-22T23:49:19.210Z" level=info msg="/tmp/outputs/cached-decision -> /var/run/argo/outputs/parameters//tmp/outputs/cached-decision" argo=true
+time="2023-06-22T23:49:19.210Z" level=error msg="cannot save parameter /tmp/outputs/condition" argo=true error="open /tmp/outputs/condition: no such file or directory"
+```
+It's weird that it's added an outputFile that I didn't define - this must be some kind of standard output. It's also weird that it's trying to open a `/tmp/outputs/condition` that
+isn't there! I'm not sure any of my script is running (I don't see any indication that it is).
+
+# Get results
+
+If we had an actual successful run:
+
+```bash
+curl ${SVC}/apis/v1beta1/runs/${RUN_ID} | jq
+```
+
+Although that looks like a mess.
+
+#### Clean Up
+
+When you are done:
+
+```bash
+$ gcloud container clusters delete $CLUSTER_NAME
+```
+
+
+### Building the Container
+
+If you need to build the container locally:
 
 ```bash
 $ docker build -t ghcr.io/converged-computing/flux-operator-component .
 ```
 
-**under development**
 
 ## License
 

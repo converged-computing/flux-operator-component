@@ -1,0 +1,120 @@
+name: Flux Framework MiniCluster
+description: |
+  Launch a task to run on a Flux Framework MiniCluster
+inputs:
+  - {name: project, type: String, "description": "Google Cloud project (required)"}
+  - {name: image, type: String, "description": "Container image for MiniCluster"}
+  - {name: command, type: String, "description": "Command for the MiniCluster (should be enclosed in quotes)"}
+  - {name: nnodes, type: Integer, "description": "Number of nodes for cluster (and size of MiniCluster) required"}
+  - {name: cluster_name, type: String, "description": "Name for cluster to create (defaults to flux-cluster)", optional: true}
+  - {name: machine_type, type: String, "description": "Google machine type (defaults to c2-standard-8)", optional: true}
+  - {name: cpu_limit, type: Integer, "description": "CPU limit (should be an integer, defaults to unset)", optional: true}
+  - {name: memory_limit, type: String, "description": "Memory limit (defaults to unset)", optional: true}
+  - {name: ntasks, type: Integer, "description": "Number of tasks (defaults to unset)", optional: true}
+  - {name: log_level, type: Integer, "description": "Log level (log level for flux)", optional: true}
+  - {name: namespace, type: String, "description": "Namespace to create for MiniCluster", optional: true}
+  - {name: debug, type: Boolean, "description": "Enable debug logging for component (not Flux MiniCluster)", optional: true}
+  - {name: quiet, type: Boolean, "description": "Enable quiet logging (for MiniCluster, to only show job command output)", optional: true}
+  - {name: strict, type: Boolean, "description": "Strict (enable strict mode for the MiniCluster entrypoint script)", optional: true}
+  - {name: local, type: Boolean, "description": "Get kubectl for local cluster", optional: true}
+  - {name: name, type: String, "description": "Name for the MiniCluster (defaults to flux-sample)", optional: true}
+  - {name: flux_operator_yaml, type: String, "description": "A URL or local path to a custom Flux Operator YAML (not required)", optional: true}
+  - {name: flux_user, type: String, "description": "A custom Flux user for the container", optional: true}
+  - {name: wrap, type: String, "description": "Arguments to flux wrap, e.g., 'strace,-e,network,-tt'", optional: true}
+  - {name: outfile, type: String, optional: true}
+
+# TODO add some kind of output here
+#outputs:
+#  - {name: output_model_uri, type: {GcsPath: {data_type: Keras model}}, description: 'GCS path where the trained model has been saved. The model (topology + weights + optimizer state) is saved in HDF5 format and can be loaded back by calling keras.models.load_model'} #Remove GcsUri and make it a proper output once artifact passing support is checked in.
+
+metadata:
+  description: Launch a task to run on a Flux Framework MiniCluster
+  annotations:
+    author: Vanessasaurus <sochat1@llnl.gov>
+    canonical_location: 'https://raw.githubusercontent.com/converged-computing/flux-operator-component/main/component.yaml'
+implementation:
+  container:
+    image: ghcr.io/converged-computing/flux-operator-component
+    command: [python3, /pipelines/component/src/deploy.py]
+    args:
+    # TODO try without project, maybe auto-detected?
+    - --project
+    - {inputValue: project}
+    - --image
+    - {inputValue: image}
+    - --command
+    - "{inputValue: command}"
+    - --nnodes
+    - {inputValue: nnodes}
+    - if:
+        cond: {isPresent: cluster_name}
+        then:
+        - --cluster-name
+        - {inputValue: cluster_name}
+    - if:
+        cond: {isPresent: machine_type}
+        then:
+        - --machine-type
+        - {inputValue: machine_type}
+    - if:
+        cond: {isPresent: cpu_limit}
+        then:
+        - --cpu-limit
+        - {inputValue: cpu_limit}
+    - if:
+        cond: {isPresent: memory_limit}
+        then:
+        - --memory-limit
+        - {inputValue: memory_limit}
+    - if:
+        cond: {isPresent: ntasks}
+        then:
+        - --ntasks
+        - {inputValue: ntasks}
+    - if:
+        cond: {isPresent: log_level}
+        then:
+        - --log-level
+        - {inputValue: log_level}
+    - if:
+        cond: {isPresent: debug}
+        then:
+        - --debug
+    - if:
+        cond: {isPresent: quiet}
+        then:
+        - --quiet
+    - if:
+        cond: {isPresent: strict}
+        then:
+        - --strict
+    - if:
+        cond: {isPresent: name}
+        then:
+        - --name
+        - {inputValue: name}
+    - if:
+        cond: {isPresent: flux_operator_yaml}
+        then:
+        - --flux-operator-yaml
+        - {inputValue: flux_operator_yaml}
+    - if:
+        cond: {isPresent: local}
+        then:
+        - --local
+        - {inputValue: local}
+    - if:
+        cond: {isPresent: flux_user}
+        then:
+        - --flux-user
+        - {inputValue: flux_user}
+    - if:
+        cond: {isPresent: flux_operator_yaml}
+        then:
+        - --wrap
+        - {inputValue: wrap}
+    - if:
+        cond: {isPresent: outfile}
+        then:
+        - --outfile
+        - {inputValue: outfile}
